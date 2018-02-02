@@ -11,10 +11,11 @@ using BEPUphysics.Paths.PathFollowing;
 using BEPUphysics.Paths;
 using BEPUphysics.Entities;
 using BEPUutilities;
+using GameCommon.MessageObjects;
 
 public class PhysicsThread : MonoBehaviour
 {
-	public GameObject pl;
+	public GameObject PlayerInstance;
 
 	private EntityMover mover;
 	private Path<BEPUutilities.Quaternion> orientationPath;
@@ -27,8 +28,7 @@ public class PhysicsThread : MonoBehaviour
 	private ParallelLooper parallelLooper;
 	CollisionGroup characters = new CollisionGroup();
 
-	//public float characterHeight = 1.75f;
-	//public float characterWidth = 0.75f;
+	public float CharacterWeight = 10;
 
 	private void Start()
 	{
@@ -40,7 +40,7 @@ public class PhysicsThread : MonoBehaviour
 
 		Space = new BEPUphysics.Space(parallelLooper);
 
-		Space.ForceUpdater.Gravity = new BEPUutilities.Vector3(0, -10f, 0);
+		Space.ForceUpdater.Gravity = new BEPUutilities.Vector3(0, -10, 0);
 		Space.TimeStepSettings.TimeStepDuration = 1f / 30f;
 
 		setplayer();
@@ -64,10 +64,10 @@ public class PhysicsThread : MonoBehaviour
 				bpBox.LocalScale.Z * bpBox.HalfExtents.Z * 2);
 
 			groundShape.Orientation = new BEPUutilities.Quaternion(bpBox.Rotation.X, bpBox.Rotation.Y, bpBox.Rotation.Z, bpBox.Rotation.W);
-
+			
 			Space.Add(groundShape);
 		}
-
+		
 		// Capsule colliders
 		foreach (var bpCapsule in colliders.Capsules)
 		{
@@ -117,17 +117,33 @@ public class PhysicsThread : MonoBehaviour
 	{
 		Entity movingEntity;
 
-		movingEntity = new Capsule(new BEPUutilities.Vector3(40, 0f, 0), 5, 5);
-		movingEntity.BecomeDynamic(10);
+		var box = PlayerInstance.GetComponent<BoxCollider>();
+		var center = box.center + box.gameObject.transform.position;
+
+		BPBox bpBox = new BPBox()
+		{
+			Center = new PositionData(center.x, center.y, center.z),
+			HalfExtents = new PositionData(box.size.x / 2f, box.size.y / 2f, box.size.z / 2f),
+			Rotation = new PositionData(box.transform.rotation.x,
+				box.transform.rotation.y, box.transform.rotation.z, box.transform.rotation.w),
+			LocalScale = new PositionData(box.transform.localScale.y, box.transform.localScale.y,
+				box.transform.localScale.z)
+		};
+
+		movingEntity = new Box(
+				new BEPUutilities.Vector3(bpBox.Center.X, bpBox.Center.Y, bpBox.Center.Z),
+				bpBox.LocalScale.X * bpBox.HalfExtents.X * 2,
+				bpBox.LocalScale.Y * bpBox.HalfExtents.Y * 2,
+				bpBox.LocalScale.Z * bpBox.HalfExtents.Z * 2);
+		movingEntity.BecomeDynamic(CharacterWeight);
 
 		/*var slerpCurve = new QuaternionSlerpCurve();
 		slerpCurve.ControlPoints.Add(0, BEPUutilities.Quaternion.Identity);
 
 		slerpCurve.PostLoop = CurveEndpointBehavior.Clamp;
 		orientationPath = slerpCurve;*/
-	
+		
 		mover = new EntityMover(movingEntity);
-
 		rotator = new EntityRotator(movingEntity);
 
 		mover.LinearMotor.Settings.Servo.SpringSettings.Stiffness /= 1000;
@@ -149,7 +165,8 @@ public class PhysicsThread : MonoBehaviour
 
 			if (Physics.Raycast(ray, out hit))
 			{
-				MoveToPosition(pl.transform.position, hit.point);
+				var startPoint = new UnityEngine.Vector3(mover.Entity.Position.X, mover.Entity.Position.Y, mover.Entity.Position.Z);
+				MoveToPosition(startPoint, hit.point);
 			}
 		}
 
@@ -158,11 +175,11 @@ public class PhysicsThread : MonoBehaviour
 			pathTime += Space.TimeStepSettings.TimeStepDuration;
 			mover.TargetPosition = positionPath.Evaluate(pathTime);
 			//rotator.TargetOrientation = orientationPath.Evaluate(pathTime);
-
-			pl.transform.position = new UnityEngine.Vector3(mover.Entity.Position.X, mover.Entity.Position.Y, mover.Entity.Position.Z);
-			//pl.transform.rotation = new UnityEngine.Quaternion(rotator.Entity.Orientation.X, rotator.Entity.Orientation.Y,
-				//rotator.Entity.Orientation.Z, rotator.Entity.Orientation.W);
 		}
+
+		PlayerInstance.transform.position = new UnityEngine.Vector3(mover.Entity.Position.X, mover.Entity.Position.Y, mover.Entity.Position.Z);
+		//PlayerInstance.transform.rotation = new UnityEngine.Quaternion(rotator.Entity.Orientation.X, rotator.Entity.Orientation.Y,
+			//rotator.Entity.Orientation.Z, rotator.Entity.Orientation.W);
 	}
 
 	public void MoveToPosition(UnityEngine.Vector3 startPoint, UnityEngine.Vector3 endPoint)
@@ -175,7 +192,7 @@ public class PhysicsThread : MonoBehaviour
 			PreLoop = CurveEndpointBehavior.Clamp,
 			PostLoop = CurveEndpointBehavior.Clamp
 		};
-
+		
 		wrappedPositionCurve.ControlPoints.Add(0, new BEPUutilities.Vector3(startPoint.x, startPoint.y, startPoint.z));
 		wrappedPositionCurve.ControlPoints.Add(1, new BEPUutilities.Vector3(endPoint.x, endPoint.y, endPoint.z));
 
