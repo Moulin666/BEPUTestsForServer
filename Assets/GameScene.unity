@@ -556,7 +556,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: 
   PlayerInstance: {fileID: 144307959}
-  CharacterWeight: 10
+  CharacterWeight: 15
 --- !u!4 &891859882
 Transform:
   m_ObjectHideFlags: 0

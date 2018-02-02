@@ -7,35 +7,27 @@ using GameCommon.SerializedPhysicsObjects;
 using BEPUphysics.Entities.Prefabs;
 using System.Collections.Generic;
 using BEPUphysics.BroadPhaseEntries;
-using BEPUphysics.Paths.PathFollowing;
-using BEPUphysics.Paths;
-using BEPUphysics.Entities;
 using BEPUutilities;
-using GameCommon.MessageObjects;
 
 public class PhysicsThread : MonoBehaviour
 {
 	public GameObject PlayerInstance;
-
-	private EntityMover mover;
-	private Path<BEPUutilities.Quaternion> orientationPath;
-	private Path<BEPUutilities.Vector3> positionPath;
-	private EntityRotator rotator;
-	private double pathTime;
+	public BEPUphysics.Character.CharacterController CharacterController;
 
 	public BEPUphysics.Space Space { get; set; }
+
+	public BEPUutilities.Vector2 totalMovement;
 
 	private ParallelLooper parallelLooper;
 	CollisionGroup characters = new CollisionGroup();
 
-	public float CharacterWeight = 10;
+	public float CharacterWeight = 15;
+
+	private RaycastHit hit;
 
 	private void Start()
 	{
 		parallelLooper = new ParallelLooper();
-		parallelLooper.AddThread();
-		parallelLooper.AddThread();
-		parallelLooper.AddThread();
 		parallelLooper.AddThread();
 
 		Space = new BEPUphysics.Space(parallelLooper);
@@ -43,7 +35,11 @@ public class PhysicsThread : MonoBehaviour
 		Space.ForceUpdater.Gravity = new BEPUutilities.Vector3(0, -10, 0);
 		Space.TimeStepSettings.TimeStepDuration = 1f / 30f;
 
-		setplayer();
+		totalMovement = BEPUutilities.Vector2.Zero;
+		CharacterController = new BEPUphysics.Character.CharacterController();
+		CharacterController.Body.Position = new BEPUutilities.Vector3(PlayerInstance.transform.position.x,
+			PlayerInstance.transform.position.y, PlayerInstance.transform.position.z);
+		Space.Add(CharacterController);
 
 		var groupPair = new CollisionGroupPair(characters, characters);
 		CollisionRules.CollisionGroupRules.Add(groupPair, CollisionRule.NoBroadPhase);
@@ -113,91 +109,38 @@ public class PhysicsThread : MonoBehaviour
 		f.Close();
 	}
 
-	public void setplayer()
-	{
-		Entity movingEntity;
-
-		var box = PlayerInstance.GetComponent<BoxCollider>();
-		var center = box.center + box.gameObject.transform.position;
-
-		BPBox bpBox = new BPBox()
-		{
-			Center = new PositionData(center.x, center.y, center.z),
-			HalfExtents = new PositionData(box.size.x / 2f, box.size.y / 2f, box.size.z / 2f),
-			Rotation = new PositionData(box.transform.rotation.x,
-				box.transform.rotation.y, box.transform.rotation.z, box.transform.rotation.w),
-			LocalScale = new PositionData(box.transform.localScale.y, box.transform.localScale.y,
-				box.transform.localScale.z)
-		};
-
-		movingEntity = new Box(
-				new BEPUutilities.Vector3(bpBox.Center.X, bpBox.Center.Y, bpBox.Center.Z),
-				bpBox.LocalScale.X * bpBox.HalfExtents.X * 2,
-				bpBox.LocalScale.Y * bpBox.HalfExtents.Y * 2,
-				bpBox.LocalScale.Z * bpBox.HalfExtents.Z * 2);
-		movingEntity.BecomeDynamic(CharacterWeight);
-
-		/*var slerpCurve = new QuaternionSlerpCurve();
-		slerpCurve.ControlPoints.Add(0, BEPUutilities.Quaternion.Identity);
-
-		slerpCurve.PostLoop = CurveEndpointBehavior.Clamp;
-		orientationPath = slerpCurve;*/
-		
-		mover = new EntityMover(movingEntity);
-		rotator = new EntityRotator(movingEntity);
-
-		mover.LinearMotor.Settings.Servo.SpringSettings.Stiffness /= 1000;
-		mover.LinearMotor.Settings.Servo.SpringSettings.Damping /= 1000;
-
-		Space.Add(movingEntity);
-		Space.Add(mover);
-		Space.Add(rotator);
-	}
-
 	public void Update()
 	{
 		Space.Update();
 
 		if (Input.GetMouseButton(0))
 		{
-			RaycastHit hit;
+			//RaycastHit hit;
 			UnityEngine.Ray ray = Camera.main.ScreenPointToRay(Input.mousePosition);
 
 			if (Physics.Raycast(ray, out hit))
 			{
-				var startPoint = new UnityEngine.Vector3(mover.Entity.Position.X, mover.Entity.Position.Y, mover.Entity.Position.Z);
-				MoveToPosition(startPoint, hit.point);
+				GameObject g = GameObject.CreatePrimitive(PrimitiveType.Sphere);
+				g.transform.position = hit.point;
 			}
 		}
 
-		if (positionPath != null)
-		{
-			pathTime += Space.TimeStepSettings.TimeStepDuration;
-			mover.TargetPosition = positionPath.Evaluate(pathTime);
-			//rotator.TargetOrientation = orientationPath.Evaluate(pathTime);
-		}
+		totalMovement = new BEPUutilities.Vector2(hit.point.z, hit.point.x);
 
-		PlayerInstance.transform.position = new UnityEngine.Vector3(mover.Entity.Position.X, mover.Entity.Position.Y, mover.Entity.Position.Z);
-		//PlayerInstance.transform.rotation = new UnityEngine.Quaternion(rotator.Entity.Orientation.X, rotator.Entity.Orientation.Y,
-			//rotator.Entity.Orientation.Z, rotator.Entity.Orientation.W);
-	}
+		if (totalMovement == BEPUutilities.Vector2.Zero)
+			CharacterController.HorizontalMotionConstraint.MovementDirection = BEPUutilities.Vector2.Zero;
+		else
+			CharacterController.HorizontalMotionConstraint.MovementDirection = BEPUutilities.Vector2.Normalize(totalMovement);
 
-	public void MoveToPosition(UnityEngine.Vector3 startPoint, UnityEngine.Vector3 endPoint)
-	{
-		pathTime = 0;
-		positionPath = null;
+		Debug.Log(CharacterController.Body.Position);
 
-		var wrappedPositionCurve = new LinearInterpolationCurve3D
-		{
-			PreLoop = CurveEndpointBehavior.Clamp,
-			PostLoop = CurveEndpointBehavior.Clamp
-		};
-		
-		wrappedPositionCurve.ControlPoints.Add(0, new BEPUutilities.Vector3(startPoint.x, startPoint.y, startPoint.z));
-		wrappedPositionCurve.ControlPoints.Add(1, new BEPUutilities.Vector3(endPoint.x, endPoint.y, endPoint.z));
+		PlayerInstance.transform.position = new UnityEngine.Vector3(
+			CharacterController.Body.Position.X,
+			CharacterController.Body.Position.Y,
+			CharacterController.Body.Position.Z);
 
-		// TO DO Rotator
-
-		positionPath = new ConstantLinearSpeedCurve(5, wrappedPositionCurve);
+		PlayerInstance.transform.rotation = new UnityEngine.Quaternion(
+			CharacterController.Body.Orientation.X, CharacterController.Body.Orientation.Y,
+			CharacterController.Body.Orientation.Z, CharacterController.Body.Orientation.W);
 	}
 }
