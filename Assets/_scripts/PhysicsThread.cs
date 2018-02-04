@@ -12,11 +12,11 @@ using BEPUutilities;
 public class PhysicsThread : MonoBehaviour
 {
 	public GameObject PlayerInstance;
-	public BEPUphysics.Character.CharacterController CharacterController;
+	private BEPUphysics.Character.CharacterController CharacterController;
+	public BEPUutilities.Vector2 totalMovement;
 
 	public BEPUphysics.Space Space { get; set; }
-
-	public BEPUutilities.Vector2 totalMovement;
+	private BEPUutilities.Vector3 target;
 
 	private ParallelLooper parallelLooper;
 	CollisionGroup characters = new CollisionGroup();
@@ -40,6 +40,29 @@ public class PhysicsThread : MonoBehaviour
 		CharacterController.Body.Position = new BEPUutilities.Vector3(PlayerInstance.transform.position.x,
 			PlayerInstance.transform.position.y, PlayerInstance.transform.position.z);
 		Space.Add(CharacterController);
+
+		//var b = PlayerInstance.GetComponent<BoxCollider>();
+		//var center = b.center + b.gameObject.transform.position;
+
+		//BPBox box = new BPBox()
+		//{
+		//	Center = new PositionData(center.x, center.y, center.z),
+		//	HalfExtents = new PositionData(b.size.x / 2f, b.size.y / 2f, b.size.z / 2f),
+		//	Rotation = new PositionData(b.transform.rotation.x,
+		//		b.transform.rotation.y, b.transform.rotation.z, b.transform.rotation.w),
+		//	LocalScale = new PositionData(b.transform.localScale.x, b.transform.localScale.y,
+		//		b.transform.localScale.z)
+		//};
+
+		//character = new Box(
+		//		new BEPUutilities.Vector3(box.Center.X, box.Center.Y, box.Center.Z),
+		//		box.LocalScale.X * box.HalfExtents.X * 2,
+		//		box.LocalScale.Y * box.HalfExtents.Y * 2,
+		//		box.LocalScale.Z * box.HalfExtents.Z * 2, CharacterWeight);
+
+		//character.Orientation = new BEPUutilities.Quaternion(box.Rotation.X, box.Rotation.Y, box.Rotation.Z, box.Rotation.W);
+
+		//Space.Add(character);
 
 		var groupPair = new CollisionGroupPair(characters, characters);
 		CollisionRules.CollisionGroupRules.Add(groupPair, CollisionRule.NoBroadPhase);
@@ -122,17 +145,29 @@ public class PhysicsThread : MonoBehaviour
 			{
 				GameObject g = GameObject.CreatePrimitive(PrimitiveType.Sphere);
 				g.transform.position = hit.point;
+
+				target = new BEPUutilities.Vector3(hit.point.x, hit.point.y, hit.point.z);
 			}
 		}
 
-		totalMovement = new BEPUutilities.Vector2(hit.point.z, hit.point.x);
-
-		if (totalMovement == BEPUutilities.Vector2.Zero)
+		if (BEPUutilities.Vector3.Distance(CharacterController.Body.Position, target) < 1f)
+		{
+			target = BEPUutilities.Vector3.Zero;
 			CharacterController.HorizontalMotionConstraint.MovementDirection = BEPUutilities.Vector2.Zero;
-		else
-			CharacterController.HorizontalMotionConstraint.MovementDirection = BEPUutilities.Vector2.Normalize(totalMovement);
+		}
 
-		Debug.Log(CharacterController.Body.Position);
+		if (target != BEPUutilities.Vector3.Zero)
+		{
+			var impulse = new BEPUutilities.Vector3(10, 0, 0);
+			var t = target - CharacterController.Body.Position;
+			t.Normalize();
+			CharacterController.Body.LinearVelocity = t * 3f;
+			//CharacterController.Body.(BEPUutilities.Vector3.Normalize(target - CharacterController.Body.Position), impulse);
+
+			//CharacterController.HorizontalMotionConstraint.MovementDirection = BEPUutilities.Vector2.Normalize(
+				//new BEPUutilities.Vector2(target.X, target.Z) - 
+				//new BEPUutilities.Vector2(CharacterController.Body.Position.X, CharacterController.Body.Position.Z));
+		}
 
 		PlayerInstance.transform.position = new UnityEngine.Vector3(
 			CharacterController.Body.Position.X,
